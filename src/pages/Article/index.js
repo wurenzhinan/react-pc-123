@@ -1,44 +1,38 @@
-import { useStore } from '@/store'
+import img404 from '@/assets/error.png'
+import './index.scss'
 import { Link, useNavigate } from 'react-router-dom'
-import { Card, Breadcrumb, Form, Button, Radio, DatePicker, Select, Table, Tag, Space } from 'antd'
+import { observer } from 'mobx-react-lite'
+import { Table, Tag, Space, Card, Breadcrumb, Form, Button, Radio, DatePicker, Select } from 'antd'
 import 'moment/locale/zh-cn'
 import locale from 'antd/es/date-picker/locale/zh_CN'
-import './index.scss'
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import img404 from '@/assets/error.png'
-import { useState } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { http } from '@/utils'
-import { observer } from 'mobx-react-lite'
+import { useStore } from '@/store'
 
 const { Option } = Select
 const { RangePicker } = DatePicker
 
 const Article = () => {
-
   const { channelStore } = useStore()
 
-  // 文章列表管理  统一管理数据 将来修改给setList传对象
-  const [articleData, setList] = useState({
-    list: [],//文章列表
-    count: 0//文章数量
+  // 文章列表管理 统一管理数据 将来修改给setArticleData传对象
+  const [articleData, setArticleData] = useState({
+    list: [],// 文章列表
+    count: 0 // 文章数量
   })
+
   // 文章参数管理
   const [params, setParams] = useState({
     page: 1,
     per_page: 10
   })
-  // 如果异步请求函数需要依赖一些数据的变化而重新执行
-  // 推荐把它写到内部
-  // 统一不抽离函数到外面  只要涉及异步请求的函数 都放到useEffect内部
-  // 本质区别：写外面每次组件更新都会重新进行函数初始化 这本身就是一次性能消耗
-  // 而写到useEffect中 只会在依赖项发生变化的时候 函数才会重新初始化
-  // 避免性能消耗
+  // 获取文章列表
   useEffect(() => {
     const loadList = async () => {
       const res = await http.get('/mp/articles', { params })
       const { results, total_count } = res.data
-      setList({
+      setArticleData({
         list: results,
         count: total_count
       })
@@ -46,47 +40,59 @@ const Article = () => {
     loadList()
   }, [params])
 
-
+  /* 表单筛选功能实现 */
   const onFinish = (values) => {
-    console.log(values)
     const { channel_id, date, status } = values
     // 数据处理
     const _params = {}
-    if (status !== -1)
-      // 格式化status
-      _params.status = status
+    // 格式化status
+    _params.status = status
+
+    // 初始化频道
     if (channel_id) {
       _params.channel_id = channel_id
     }
+    // 初始化时间
     if (date) {
       _params.begin_pubdate = date[0].format('YYYY-MM-DD')
       _params.end_pubdate = date[1].format('YYYY-MM-DD')
     }
-    // 修改params数据引起接口的重新发送 对象的合并是一个整体覆盖  改了对象的整体引用
+    // 修改params数据 引起接口的重新发送 对象的合并是一个整体覆盖 改了对象的整体引用
     setParams({
       ...params,
       ..._params
     })
   }
+  // 翻页实现
   const pageChange = (page) => {
     setParams({
       ...params,
       page
     })
   }
-  // 删除
+
+  const formatStatus = (type) => {
+    const TYPES = {
+      1: <Tag color="red">审核失败</Tag>,
+      2: <Tag color="green">审核成功</Tag>
+    }
+    return TYPES[type]
+  }
+
+  // 删除文章
   const delArticle = async (data) => {
     await http.delete(`/mp/articles/${data.id}`)
-    // 刷新列表
+    // 刷新一下列表
     setParams({
-      page: 1,
-      per_page: 10
+      ...params,
+      page: 1
     })
   }
-  // 编辑
+
+  // 编辑文章
   const navigate = useNavigate()
   const goPublish = (data) => {
-    navigate(`/publish?${data.id}`)
+    navigate(`/publish?id=${data.id}`)
   }
 
   const columns = [
@@ -106,7 +112,7 @@ const Article = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: data => <Tag color="green">审核通过</Tag>
+      render: data => formatStatus(data)
     },
     {
       title: '发布时间',
@@ -133,8 +139,7 @@ const Article = () => {
               type="primary"
               shape="circle"
               icon={<EditOutlined />}
-              onClick={() => goPublish(data)}
-            />
+              onClick={() => goPublish(data)} />
             <Button
               type="primary"
               danger
@@ -144,12 +149,14 @@ const Article = () => {
             />
           </Space>
         )
-      }
+      },
+      fixed: 'right'
     }
   ]
+
   return (
     <div>
-      {/* 文章筛选区域 */}
+      {/* 筛选区域 */}
       <Card
         title={
           <Breadcrumb separator=">">
@@ -163,10 +170,10 @@ const Article = () => {
       >
         <Form
           onFinish={onFinish}
-          initialValues={{ status: -1 }}>
+          initialValues={{ status: null }}>
           <Form.Item label="状态" name="status">
             <Radio.Group>
-              <Radio value={-1}>全部</Radio>
+              <Radio value={null}>全部</Radio>
               <Radio value={0}>草稿</Radio>
               <Radio value={1}>待审核</Radio>
               <Radio value={2}>审核通过</Radio>
@@ -201,11 +208,15 @@ const Article = () => {
           rowKey="id"
           columns={columns}
           dataSource={articleData.list}
-          pagination={{
-            pageSize: params.per_page,
-            total: articleData.count,
-            onchange: pageChange
-          }}
+          pagination={
+            {
+              pageSize: params.per_page,
+              total: articleData.count,
+              onChange: pageChange,
+              current: params.page
+            }
+          }
+          bordered
         />
       </Card>
     </div>
