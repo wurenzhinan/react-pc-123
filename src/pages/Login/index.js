@@ -1,20 +1,29 @@
-import { Card, Form, Input, Checkbox, Button } from 'antd'
+import { Card, Form, Input, Checkbox, Button, message } from 'antd'
 import logo from '@/assets/logo.png'
 import './index.scss'
 import { useStore } from '@/store'
+import { useNavigate } from "react-router-dom"
 function Login () {
   const { loginStore } = useStore()
-  const onFinish = (values) => {
-    console.log('Success:', values)
+  const navigate = useNavigate()
+  const onFinish = async (values) => {
     // value:放置的是所有表单项中用户输入的内容
     // todo:登录
-    loginStore.getToken({
-      mobile: values.usename,
-      code: values.password
-    })
-  }
-  const onFinishFailed = (errorInfo) => {
-    console.log('Failed:', errorInfo)
+    try {
+      // value:放置的是所有表单项中用户输入的内容
+      // todo:登录
+      // 由于loginStore里面的getToken加了aysnc则很难革命getToken是一个promise对象，则可以加上await，使之同步运行
+      await loginStore.getToken({
+        mobile: values.username,
+        code: values.password
+      })
+      // 跳转首页 useNavigate
+      navigate("/", { replace: true })
+      // 提示用户
+      message.success('登录成功')
+    } catch (e) {
+      message.error(e.response?.data?.message || '登录失败')
+    }
   }
   return (
     <div className="login">
@@ -26,7 +35,6 @@ function Login () {
           initialValues={{ remember: true }}
           validateTrigger={['onBlur', 'onChange']}
           onFinish={onFinish}
-          onFinishFailed={onFinishFailed}
         >
           <Form.Item
             name="username"
@@ -65,7 +73,7 @@ function Login () {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" size="large" block>
               登录
             </Button>
           </Form.Item>
